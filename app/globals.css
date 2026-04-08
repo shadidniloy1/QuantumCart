@@ -1,4 +1,4 @@
-@import "tw-animate-css";
+/* @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -49,4 +49,14 @@ body {
 
 * {
   box-sizing: border-box;
+} */
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: your custom styles */
+body {
+  font-family: sans-serif;
 }
