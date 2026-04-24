@@ -1,15 +1,27 @@
-import { PrismaClient, Prisma } from "../app/generated/prisma/client";
+// import { PrismaClient, Prisma } from "../app/generated/prisma/client";
+// import { PrismaPg } from "@prisma/adapter-pg";
+// import "dotenv/config";
+// import {faker} from "@faker-js/faker"
+
+// const adapter = new PrismaPg({
+//   connectionString: process.env.DATABASE_URL,
+// });
+
+// const prisma = new PrismaClient({
+//   adapter,
+// });
+
+import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import "dotenv/config";
-import {faker} from "@faker-js/faker"
+import { Pool } from "pg";
+import { faker } from "@faker-js/faker";
+import * as dotenv from "dotenv";
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-});
+dotenv.config();
 
-const prisma = new PrismaClient({
-  adapter,
-});
+const pool    = new Pool({ connectionString: process.env.DATABASE_URL! });
+const adapter = new PrismaPg(pool);
+const prisma  = new PrismaClient({ adapter } as any);
 
 
 // ─────────────────────────────────────────

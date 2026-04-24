@@ -5,42 +5,32 @@ export async function POST(req: NextRequest) {
   try {
     const { userId, productId } = await req.json();
     const item = await prisma.wishlistItem.upsert({
-      where: {
-        userId_productId: {
-          userId,
-          productId,
-        },
-      },
+      where:  { userId_productId: { userId, productId } },
       update: {},
       create: { userId, productId },
     });
     return NextResponse.json(item);
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Wishlist POST error:", error?.message);
     return NextResponse.json(
       { error: "Failed to add to wishlist" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
-export async function DELETE(req: NextResponse) {
+export async function DELETE(req: NextRequest) {
   try {
     const { userId, productId } = await req.json();
     await prisma.wishlistItem.delete({
-      where: {
-        userId_productId: {
-          userId,
-          productId,
-        },
-      },
+      where: { userId_productId: { userId, productId } },
     });
-    return NextResponse.json({
-      success: true,
-    });
-  } catch (error) {
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Wishlist DELETE error:", error?.message);
     return NextResponse.json(
       { error: "Failed to remove from wishlist" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

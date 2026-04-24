@@ -4,16 +4,12 @@ import prisma from "@/lib/prisma";
 export async function GET() {
   try {
     const products = await prisma.product.findMany({
-      where: { featured: true, published: true },
+      where:   { featured: true, published: true },
       include: {
         category: { select: { name: true, slug: true } },
-        reviews: {
-          select: {
-            rating: true,
-          },
-        },
+        reviews:  { select: { rating: true } },
       },
-      take: 8,
+      take:    8,
       orderBy: { createdAt: "desc" },
     });
 
@@ -27,10 +23,11 @@ export async function GET() {
     }));
 
     return NextResponse.json(enriched);
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Featured products error:", error?.message);
     return NextResponse.json(
-        {error: "Failed to fetch featured products"},
-        {status: 500}
+      { error: "Failed to fetch featured products" },
+      { status: 500 }
     );
   }
 }

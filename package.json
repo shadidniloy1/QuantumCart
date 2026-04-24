@@ -14,7 +14,7 @@
     "@faker-js/faker": "^10.4.0",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/adapter-pg": "^7.6.0",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.6.0",
     "@stripe/stripe-js": "^9.0.1",
     "autoprefixer": "^10.4.27",

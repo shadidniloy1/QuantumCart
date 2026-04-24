@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import FilterSidebar from "@/components/shop/FilterSidebar";
 import ShopToolbar from "@/components/shop/ShopToolbar";
+import ActiveFilters from "@/components/shop/ActiveFilters";
 import Pagination from "@/components/shop/Pagination";
 import ProductCard from "@/components/shop/ProductCard";
-import ActiveFilters from "@/components/shop/ActiveFilters";
 
 interface Filters {
   category: string;
@@ -18,90 +18,120 @@ interface Filters {
   color: string;
 }
 
+const DEFAULT_FILTERS: Filters = {
+  category: "",
+  minPrice: 0,
+  maxPrice: 500,
+  size: "",
+  color: "",
+};
+
 function ShopContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
+  // ── State ──────────────────────────────────
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState("featured");
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
-  const [filters, setFilters] = useState<Filters>({
-    category: searchParams.get("category") || "",
-    minPrice: Number(searchParams.get("minPrice") || 0),
-    maxPrice: Number(searchParams.get("maxPrice") || 500),
-    size: searchParams.get("size") || "",
-    color: searchParams.get("color") || "",
-  });
-  const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [sort, setSort] = useState(searchParams.get("sort") || "featured");
-  const [page, setPage] = useState(Number(searchParams.get("page") || 1));
-
-  // Debounced search
-  const [searchDebounced, setSearchDebounced] = useState(search);
+  // Debounce search input
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    const t = setTimeout(() => setSearchDebounced(search), 400);
-    return () => clearTimeout(t);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
   }, [search]);
 
-  //   Fetch products whenever filters change
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        ...(filters.category && {
-          category: filters.category,
-        }),
-        ...(searchDebounced && {
-          search: searchDebounced,
-        }),
-        ...(filters.minPrice > 0 && { minPrice: String(filters.minPrice) }),
-        ...(filters.maxPrice < 500 && { maxPrice: String(filters.maxPrice) }),
-        ...(filters.size && { size: filters.size }),
-        ...(filters.color && { color: filters.color }),
-        sort,
-        page: String(page),
-        limit: "12",
-      });
-
-      const res = await fetch(`/api/products?${params}`);
-      const data = await res.json();
-
-      setProducts(data.products ?? []);
-      setTotal(data.total ?? 0);
-      setTotalPages(data.totalPages ?? 1);
-    } catch {
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, searchDebounced, sort, page]);
-
+  // ── Single fetch effect ─────────────────────
+  // All dependencies are listed directly — no useCallback needed
   useEffect(() => {
-    setPage(1);
-  }, [filters, searchDebounced, sort]);
+    let cancelled = false;
 
+    async function load() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", "12");
+        params.set("sort", sort);
+
+        if (filters.category) params.set("category", filters.category);
+        if (debouncedSearch) params.set("search", debouncedSearch);
+        if (filters.minPrice > 0)
+          params.set("minPrice", String(filters.minPrice));
+        if (filters.maxPrice < 500)
+          params.set("maxPrice", String(filters.maxPrice));
+        if (filters.size) params.set("size", filters.size);
+        if (filters.color) params.set("color", filters.color);
+
+        const res = await fetch(`/api/products?${params.toString()}`);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        // Only update state if this fetch wasn't cancelled
+        if (!cancelled) {
+          setProducts(data.products ?? []);
+          setTotal(data.total ?? 0);
+          setTotalPages(data.totalPages ?? 1);
+        }
+      } catch (err) {
+        console.error("Failed to fetch products:", err);
+        if (!cancelled) {
+          setProducts([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+
+    // Cleanup: cancel stale fetches when dependencies change
+    return () => {
+      cancelled = true;
+    };
+  }, [page, sort, debouncedSearch, filters]); // ← direct deps, no useCallback
+
+  // ── Handlers ───────────────────────────────
   function handleFiltersChange(newFilters: Filters) {
     setFilters(newFilters);
+    setPage(1); // reset page when filters change
+  }
+
+  function handleSort(newSort: string) {
+    setSort(newSort);
     setPage(1);
   }
 
+  // Page title from category
+  const pageTitle = filters.category
+    ? filters.category.charAt(0).toUpperCase() +
+      filters.category.slice(1).replace(/-/g, " ")
+    : "All Products";
+
+  // ── Render ─────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Page heading */}
+      {/* Heading */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {filters.category
-            ? filters.category.charAt(0).toUpperCase() +
-              filters.category.slice(1).replace("-", " ")
-            : "All Products"}
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
         <p className="text-gray-500 text-sm mt-1">
           {loading
-            ? "Loading..."
+            ? "Loading products..."
             : `${total} product${total !== 1 ? "s" : ""} available`}
         </p>
       </div>
@@ -113,12 +143,13 @@ function ShopContent() {
         view={view}
         total={total}
         onSearch={setSearch}
-        onSort={setSort}
+        onSort={handleSort}
         onView={setView}
         onOpenFilter={() => setMobileOpen(true)}
       />
 
       <div className="flex gap-6">
+        {/* Desktop sidebar */}
         <aside className="hidden lg:block w-56 flex-shrink-0">
           <div className="sticky top-24">
             <FilterSidebar filters={filters} onChange={handleFiltersChange} />
@@ -136,20 +167,14 @@ function ShopContent() {
           </SheetContent>
         </Sheet>
 
-        {/* Main content */}
+        {/* Products area */}
         <div className="flex-1 min-w-0">
           {/* Active filter chips */}
           <ActiveFilters filters={filters} onChange={handleFiltersChange} />
 
-          {/* Product grid / list */}
+          {/* Grid */}
           {loading ? (
-            <div
-              className={
-                view === "grid"
-                  ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4"
-                  : "flex flex-col gap-4"
-              }
-            >
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="space-y-3">
                   <Skeleton className="aspect-square rounded-2xl" />
@@ -183,14 +208,9 @@ function ShopContent() {
               </p>
               <button
                 onClick={() => {
-                  setFilters({
-                    category: "",
-                    minPrice: 0,
-                    maxPrice: 500,
-                    size: "",
-                    color: "",
-                  });
+                  setFilters(DEFAULT_FILTERS);
                   setSearch("");
+                  setPage(1);
                 }}
                 className="text-violet-600 text-sm font-medium hover:underline"
               >
@@ -226,13 +246,13 @@ function ShopContent() {
   );
 }
 
+// Suspense wrapper is still needed for useSearchParams
 export default function ShopPage() {
   return (
     <Suspense
       fallback={
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <Skeleton className="h-8 w-48 mb-6" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
             {Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="aspect-square rounded-2xl" />
             ))}
