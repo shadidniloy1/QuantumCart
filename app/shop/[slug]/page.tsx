@@ -210,10 +210,139 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Name */}
-            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{product.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+              {product.name}
+            </h1>
 
             {/* Rating */}
-            
+            <div className="flex items-center gap-3">
+              <StarRating />
+              <span className="text-sm text-gray-500">
+                {product.avgRating.toFixed(1)} ({product.reviews?.length ?? 0}{" "}
+                reviews)
+              </span>
+            </div>
+
+            {/* Price */}
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold text-gray-900">
+                ${product.price.toFixed(2)}
+              </span>
+              {product.comparePrice && (
+                <span className="text-lg text-gray-400 line-through">
+                  {" "}
+                  ${product.comparePrice.toFixed(2)}
+                </span>
+              )}
+              {discount && (
+                <span className="text-sm font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                  -{discount}% OFF
+                </span>
+              )}
+            </div>
+
+            {/* Description */}
+            <p className="text-gray-600 text-sm leading-relaxed">
+              {product.description}
+            </p>
+
+            <div className="h-px bg-gray-100" />
+
+            {/* Color selector */}
+            <div>
+              <p className="text-sm font-semibold text-gray-900 mb-3">
+                Color:{" "}
+                <span className="font-normal text-gray-500">
+                  {selectedColor}
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {product.color.map((color: string) => {
+                  const colorMap: Record<string, string> = {
+                    Black: "#1a1a1a",
+                    White: "#f9fafb",
+                    Navy: "#1e3a5f",
+                    Gray: "#9ca3af",
+                    Red: "#dc2626",
+                    Blue: "#2563eb",
+                    Green: "#16a34a",
+                    Beige: "#d4b483",
+                  };
+                  return (
+                    <button
+                      key={color}
+                      onClick={() => setSelectedColor(color)}
+                      title={color}
+                      className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                        selectedColor === color
+                          ? "border-violet-500 scale-110"
+                          : "border-transparent"
+                      }`}
+                      style={{
+                        background: colorMap[color] ?? "#888",
+                        outline:
+                          color === "White" ? "1px solid #e5e7eb" : "none",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Size selector */}
+            <div>
+              <p className="text-sm font-semibold text-gray-900 mb-3">
+                Size:{" "}
+                <span className="font-normal text-gray-500">
+                  {selectedSize}
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {product.sizes.map((size: string) => (
+                  <button
+                    key={size}
+                    onClick={() => setSelectedSize(size)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                      selectedSize === size
+                        ? "bg-violet-600 text-white border-violet-600"
+                        : "border-gray-200 text-gray-600 hover:border-violet-300"
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quantity */}
+            <div className="flex items-center gap-4">
+              <p className="text-sm font-semibold text-gray-900">Quantity:</p>
+              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 transition-colors"
+                >
+                  −
+                </button>
+
+                <span className="w-10 text-center text-sm font-semibold">
+                  {quantity}
+                </span>
+
+                <button
+                  onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
+                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+
+              <span className="text-xs text-gray-400">
+                {product.stock} in stock
+              </span>
+            </div>
+
+            {/* Action buttons */}
           </div>
         </div>
       </div>
