@@ -330,7 +330,9 @@ export default function ProductDetailPage() {
                 </span>
 
                 <button
-                  onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
+                  onClick={() =>
+                    setQuantity((q) => Math.min(product.stock, q + 1))
+                  }
                   className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 transition-colors"
                 >
                   +
@@ -343,9 +345,92 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Action buttons */}
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={addingCart || product.stock === 0}
+                  className="flex-1 bg-gray-900 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                >
+                  {addingCart ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShoppingBag className="w-4 h-4" />
+                  )}
+                  {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+                </button>
+                <button
+                  onClick={handleWishlist}
+                  className={`w-14 rounded-xl border flex items-center justify-center transition-colors ${
+                    wishlisted
+                      ? "bg-red-50 border-red-200 text-red-500"
+                      : "border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-500"
+                  }`}
+                >
+                  <Heart
+                    className={`w-5 h-5 ${wishlisted ? "fill-red-500" : ""}`}
+                  />
+                </button>
+              </div>
+
+              {/* AI try on button */}
+              <button
+                onClick={() => setTryOnOpen(true)}
+                className="w-full bg-violet-600 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-violet-700 transition-colors"
+              >
+                <Sparkles className="w-4 h-4" />
+                Try AI Virtual Try-On
+              </button>
+            </div>
+
+            {/* Trust badges */}
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              {[
+                { icon: Truck, title: "Free shipping", sub: "Orders over $50" },
+                {
+                  icon: RotateCcw,
+                  title: "30-day returns",
+                  sub: "No questions",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Secure payment",
+                  sub: "256-bit SSL",
+                },
+              ].map(({ icon: Icon, title, sub }) => (
+                <div
+                  key={title}
+                  className="text-center p-3 bg-gray-50 rounded-xl"
+                >
+                  <Icon className="w-5 h-5 text-violet-500 mx-auto mb-1" />
+                  <p className="text-xs font-semibold text-gray-700">{title}</p>
+                  <p className="text-xs text-gray-400">{sub}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Reviews */}
+        <ReviewsSection />
+
+        {/* Related products */}
+        {related.length > 0 && (
+          <div className="mt-16">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              You might also like
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {related.slice(0, 4).map((p: any) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* AI Try-on Modal */}
+      <TryOnModal />
     </>
   );
 }
