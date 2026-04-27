@@ -144,7 +144,7 @@ export default function ProductDetailPage() {
     );
   }
 
-  if (!product || product.console.error) {
+  if (!product || product?.console?.error) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-3">
@@ -189,7 +189,7 @@ export default function ProductDetailPage() {
         {/* Main content */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-16">
           {/* Left - image gallery */}
-          <ImageGallery />
+          <ImageGallery images={product.images} name={product.name} />
 
           {/* Right - Product info */}
           <div className="flex flex-col gap-5">
@@ -216,7 +216,7 @@ export default function ProductDetailPage() {
 
             {/* Rating */}
             <div className="flex items-center gap-3">
-              <StarRating />
+              <StarRating value={Math.round(product.avgRating)} readonly />
               <span className="text-sm text-gray-500">
                 {product.avgRating.toFixed(1)} ({product.reviews?.length ?? 0}{" "}
                 reviews)
@@ -257,7 +257,7 @@ export default function ProductDetailPage() {
                 </span>
               </p>
               <div className="flex flex-wrap gap-2">
-                {product.color.map((color: string) => {
+                {(product.colors ?? []).map((color: string) => {
                   const colorMap: Record<string, string> = {
                     Black: "#1a1a1a",
                     White: "#f9fafb",
@@ -298,7 +298,7 @@ export default function ProductDetailPage() {
                 </span>
               </p>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((size: string) => (
+                {(product.sizes ?? []).map((size: string) => (
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
@@ -412,7 +412,17 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Reviews */}
-        <ReviewsSection />
+        <ReviewsSection
+          slug={slug}
+          reviews={product.reviews ?? []}
+          avgRating={product.avgRating}
+          onNewReview={(review) =>
+            setProduct((p: any) => ({
+              ...p,
+              reviews: [review, ...p.reviews],
+            }))
+          }
+        />
 
         {/* Related products */}
         {related.length > 0 && (
@@ -430,7 +440,12 @@ export default function ProductDetailPage() {
       </div>
 
       {/* AI Try-on Modal */}
-      <TryOnModal />
+      <TryOnModal
+        open={tryOnOpen}
+        onClose={() => setTryOnOpen(false)}
+        productImage={product.images?.[0] ?? ""}
+        productName={product.name}
+      />
     </>
   );
 }
