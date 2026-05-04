@@ -1,5 +1,6 @@
 "use client";
 
+import { useCartStore } from "@/store/cartStore";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -52,7 +53,9 @@ function getInitials(name: string | null | undefined): string {
 export default function Navbar() {
   const { user, dbUser, logout } = useAuth();
   const pathname = usePathname();
-  const [cartCount, setCartCount] = useState(0);
+  // const [cartCount, setCartCount] = useState(0);
+  const cartCount = useCartStore((s) => s.count);
+  const setCount = useCartStore((s) => s.setCount);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -72,9 +75,9 @@ export default function Navbar() {
     try {
       const res = await fetch(`/api/cart/count?userId=${dbUser?.id}`);
       const data = await res.json();
-      setCartCount(data.count ?? 0);
+      setCount(data.count ?? 0);
     } catch {
-      setCartCount(0);
+      setCount(0);
     }
   }
 
