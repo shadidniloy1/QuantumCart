@@ -143,19 +143,106 @@ export default function AdminDashboard() {
                       {order.user?.name ?? order.user?.email ?? "Guest"}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? "s" : ""} ·{" "}
+                      {order.items?.length ?? 0} item
+                      {(order.items?.length ?? 0) !== 1 ? "s" : ""} ·{" "}
                       {new Date(order.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    
+                    <p className="text-sm font-bold text-gray-900">
+                      ${order.total.toFixed(2)}
+                    </p>
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        STATUS_COLORS[order.status] ??
+                        "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {order.status}
+                    </span>
                   </div>
                 </Link>
               ))}
             </div>
           )}
         </div>
+
+        {/* Low Stock */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Low Stock
+            </h2>
+            <Link
+              href="/admin/products"
+              className="text-sm text-violet-600 hover:underline"
+            >
+              View all
+            </Link>
+          </div>
+
+          {stats?.lowStockProducts?.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-8">
+              All products well stocked!
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {stats?.lowStockProducts?.map((product: any) => (
+                <div key={product.id} className="flex items-center gap-3">
+                  <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                    <Image
+                      src={product.images?.[0] ?? ""}
+                      alt={product.name}
+                      fill
+                      className="object-cover"
+                      sizes="40px"
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 line-clamp-1">
+                      {product.name}
+                    </p>
+                    <p
+                      className={`text-xs font-semibold ${
+                        product.stock === 0
+                          ? "text-red-500"
+                          : product.stock <= 5
+                            ? "text-amber-500"
+                            : "text-gray-400"
+                      }`}
+                    >
+                      {product.stock === 0
+                        ? "Out of stock"
+                        : `${product.stock} left`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Order status breakdown */}
+      {stats?.ordersByStatus?.length > 0 && (
+        <div className="mt-6 bg-white rounded-2xl border border-gray-100 p-5">
+          <h2 className="font-bold text-gray-900 mb-5">Orders by Status</h2>
+          <div className="flex flex-wrap gap-3">
+            {stats.ordersByStatus.map((s: any) => (
+              <div
+                key={s.status}
+                className={`px-4 py-2.5 rounded-xl text-sm font-semibold ${
+                  STATUS_COLORS[s.status] ?? "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {s.status}: {s._count.status}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
