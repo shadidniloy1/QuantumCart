@@ -59,6 +59,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import Navbar from "@/components/layout/Navbar";
+import ChatWidget       from "@/components/chat/ChatWidget";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -80,6 +81,7 @@ export default function RootLayout({
           <main className="min-h-screen bg-gray-50">
             {children}
           </main>
+          <ChatWidget />
           <Toaster position="bottom-right" />
         </AuthProvider>
       </body>
