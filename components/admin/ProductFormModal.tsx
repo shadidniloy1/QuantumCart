@@ -7,48 +7,99 @@ import { z } from "zod";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import type { Resolver } from "react-hook-form";
 
-const SIZES_OPTIONS  = ["XS","S","M","L","XL","XXL","28","30","32","34","36","38","39","40","41","42","43","44","45","One Size"];
-const COLORS_OPTIONS = ["Black","White","Navy","Gray","Red","Blue","Green","Beige"];
+const SIZES_OPTIONS = [
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "XXL",
+  "28",
+  "30",
+  "32",
+  "34",
+  "36",
+  "38",
+  "39",
+  "40",
+  "41",
+  "42",
+  "43",
+  "44",
+  "45",
+  "One Size",
+];
+const COLORS_OPTIONS = [
+  "Black",
+  "White",
+  "Navy",
+  "Gray",
+  "Red",
+  "Blue",
+  "Green",
+  "Beige",
+];
+
 
 const schema = z.object({
-  name:         z.string().min(2, "Required"),
-  description:  z.string().min(10, "Required"),
-  price:        z.coerce.number().min(0.01, "Required"),
+  name: z.string().min(2, "Required"),
+  description: z.string().min(10, "Required"),
+  price: z.coerce.number().min(0.01, "Required"),
   comparePrice: z.coerce.number().optional(),
-  stock:        z.coerce.number().min(0),
-  categoryId:   z.string().min(1, "Required"),
-  featured:     z.boolean().optional(),
-  published:    z.boolean().optional(),
+  stock: z.coerce.number().min(0),
+  categoryId: z.string().min(1, "Required"),
+  featured: z.boolean().optional(),
+  published: z.boolean().optional(),
+});
+
+// const resolver: Resolver<FormData> = zodResolver(schema);
+const form = useForm<FormData>({
+  resolver: zodResolver(schema) as any,
 });
 
 type FormData = z.infer<typeof schema>;
 
-const inputClass = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition";
+const inputClass =
+  "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition";
 
 interface Props {
-  open:     boolean;
-  onClose:  () => void;
+  open: boolean;
+  onClose: () => void;
   product?: any;
-  onSaved:  (product: any, isEdit: boolean) => void;
+  onSaved: (product: any, isEdit: boolean) => void;
 }
 
 export default function ProductFormModal({
-  open, onClose, product, onSaved,
+  open,
+  onClose,
+  product,
+  onSaved,
 }: Props) {
   const isEdit = !!product;
-  const [loading,    setLoading]    = useState(false);
+  const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
-  const [images,     setImages]     = useState<string[]>([""]);
-  const [sizes,      setSizes]      = useState<string[]>([]);
-  const [colors,     setColors]     = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>([""]);
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
+
+  // const {
+  //   register,
+  //   handleSubmit,
+  //   reset,
+  //   formState: { errors },
+  // } = useForm<FormData>({ resolver: zodResolver(schema) });
+  // const form = useForm<FormData>({
+  //   resolver,
+  // });
 
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = form;
 
   // Load categories
   useEffect(() => {
@@ -63,22 +114,27 @@ export default function ProductFormModal({
     if (!open) return;
     if (product) {
       reset({
-        name:         product.name,
-        description:  product.description,
-        price:        product.price,
+        name: product.name,
+        description: product.description,
+        price: product.price,
         comparePrice: product.comparePrice ?? undefined,
-        stock:        product.stock,
-        categoryId:   product.categoryId,
-        featured:     product.featured,
-        published:    product.published,
+        stock: product.stock,
+        categoryId: product.categoryId,
+        published: product.published ?? true,
+        featured: product.featured ?? false,
       });
       setImages(product.images?.length > 0 ? product.images : [""]);
-      setSizes(product.sizes  ?? []);
+      setSizes(product.sizes ?? []);
       setColors(product.colors ?? []);
     } else {
       reset({
-        name: "", description: "", price: 0,
-        stock: 0, categoryId: "", featured: false, published: true,
+        name: "",
+        description: "",
+        price: 0,
+        stock: 0,
+        categoryId: "",
+        featured: false,
+        published: true,
       });
       setImages([""]);
       setSizes([]);
@@ -102,12 +158,12 @@ export default function ProductFormModal({
         colors,
       };
 
-      const url    = isEdit
+      const url = isEdit
         ? `/api/admin/products/${product.id}`
         : "/api/admin/products";
       const method = isEdit ? "PATCH" : "POST";
 
-      const res  = await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -126,20 +182,19 @@ export default function ProductFormModal({
 
   function toggleSize(s: string) {
     setSizes((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
   }
 
   function toggleColor(c: string) {
     setColors((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl p-0 rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-bold text-gray-900">
@@ -165,9 +220,15 @@ export default function ProductFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Product Name
               </label>
-              <input {...register("name")} className={inputClass} placeholder="Classic White Tee" />
+              <input
+                {...register("name")}
+                className={inputClass}
+                placeholder="Classic White Tee"
+              />
               {errors.name && (
-                <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.name.message}
+                </p>
               )}
             </div>
 
@@ -183,7 +244,9 @@ export default function ProductFormModal({
                 placeholder="Product description..."
               />
               {errors.description && (
-                <p className="text-xs text-red-500 mt-1">{errors.description.message}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.description.message}
+                </p>
               )}
             </div>
 
@@ -195,12 +258,15 @@ export default function ProductFormModal({
                 </label>
                 <input
                   {...register("price")}
-                  type="number" step="0.01"
+                  type="number"
+                  step="0.01"
                   className={inputClass}
                   placeholder="29.99"
                 />
                 {errors.price && (
-                  <p className="text-xs text-red-500 mt-1">{errors.price.message}</p>
+                  <p className="text-xs text-red-500 mt-1">
+                    {errors.price.message}
+                  </p>
                 )}
               </div>
               <div>
@@ -209,7 +275,8 @@ export default function ProductFormModal({
                 </label>
                 <input
                   {...register("comparePrice")}
-                  type="number" step="0.01"
+                  type="number"
+                  step="0.01"
                   className={inputClass}
                   placeholder="39.99"
                 />
@@ -235,11 +302,15 @@ export default function ProductFormModal({
               <select {...register("categoryId")} className={inputClass}>
                 <option value="">Select category</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
                 ))}
               </select>
               {errors.categoryId && (
-                <p className="text-xs text-red-500 mt-1">{errors.categoryId.message}</p>
+                <p className="text-xs text-red-500 mt-1">
+                  {errors.categoryId.message}
+                </p>
               )}
             </div>
 
@@ -264,7 +335,9 @@ export default function ProductFormModal({
                     {images.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => setImages(images.filter((_, j) => j !== i))}
+                        onClick={() =>
+                          setImages(images.filter((_, j) => j !== i))
+                        }
                         className="w-10 flex items-center justify-center text-red-400 hover:text-red-600"
                       >
                         <Trash2 className="w-4 h-4" />
