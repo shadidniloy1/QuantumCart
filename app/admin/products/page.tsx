@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
   Plus,
@@ -13,7 +14,11 @@ import {
   ToggleRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import ProductFormModal from "@/components/admin/ProductFormModal";
+// import ProductFormModal from "@/components/admin/ProductFormModal";
+const ProductFormModal = dynamic(
+  () => import("@/components/admin/ProductFormModal"),
+  { ssr: false }
+);
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -321,7 +326,7 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      <ProductFormModal
+      {/* <ProductFormModal
         open={modalOpen}
         onClose={() => {
           setModalOpen(false);
@@ -329,7 +334,18 @@ export default function AdminProductsPage() {
         }}
         product={editProduct}
         onSaved={handleSaved}
-      />
+      /> */}
+      {modalOpen && (
+        <ProductFormModal
+          open={modalOpen}
+          onClose={() => {
+            setModalOpen(false);
+            setEditProduct(null);
+          }}
+          product={editProduct}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }
