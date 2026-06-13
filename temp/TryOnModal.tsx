@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Upload,
@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
-import { getTryOnStatusLabel, useTryOn } from "@/hooks/useTryOn";
 
 interface Props {
   open: boolean;
@@ -22,7 +21,7 @@ interface Props {
   productName: string;
 }
 
-type UploadStep = "upload" | "result";
+type Step = "upload" | "generating" | "result" | "error";
 
 export default function TryOnModal({
   open,
@@ -30,91 +29,50 @@ export default function TryOnModal({
   productImage,
   productName,
 }: Props) {
-  const [uploadStep, setUploadStep] = useState<UploadStep>("upload");
+  const [step, setStep] = useState<Step>("upload");
   const [userPhoto, setUserPhoto] = useState<File | null>(null);
-  // previewUrl is tracked in a ref so we can revoke it on cleanup — fixes memory leak
-  const previewUrlRef = useRef<string>("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [resultUrl, setResultUrl] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { status, resultUrl, error, startTryOn, reset } = useTryOn();
-
-  // ── Derive compound step ────────────────────────────────────────────────────
-  const isGenerating =
-    status === "uploading" || status === "processing";
-  const isFailed = status === "failed";
-
-  // Transition to result view once AI succeeds
-  useEffect(() => {
-    if (status === "succeeded" && resultUrl) {
-      setUploadStep("result");
-    }
-  }, [status, resultUrl]);
-
-  // ── Revoke object URL on unmount / photo change — fixes memory leak ─────────
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) {
-        URL.revokeObjectURL(previewUrlRef.current);
-      }
-    };
-  }, []);
-
-  function setPhoto(file: File) {
-    // Revoke previous object URL before creating a new one
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current);
-    }
-    const url = URL.createObjectURL(file);
-    previewUrlRef.current = url;
-    setUserPhoto(file);
-    setPreviewUrl(url);
-  }
-
-  function clearPhoto() {
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current);
-      previewUrlRef.current = "";
-    }
-    setUserPhoto(null);
-    setPreviewUrl("");
-  }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // validate file type and size
     if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file");
+      toast.error("please upload an image file");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
       toast.error("Image must be under 10MB");
       return;
     }
-    setPhoto(file);
+
+    setUserPhoto(file);
+    setPreviewUrl(URL.createObjectURL(file));
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
-    // FIX: removed duplicate null check
     const file = e.dataTransfer.files?.[0];
+    if (!file) return;
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Please upload an image file");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Image must be under 10MB");
-      return;
-    }
-    setPhoto(file);
+    setUserPhoto(file);
+    setPreviewUrl(URL.createObjectURL(file));
   }
 
   async function handleGenerate() {
     if (!userPhoto) return;
+    setStep("generating");
 
     try {
-      // Step 1 — Upload user photo to Cloudinary
+      // Step - 1: upload user photo to Cloudinary
       const formData = new FormData();
       formData.append("file", userPhoto);
 
@@ -123,61 +81,55 @@ export default function TryOnModal({
         body: formData,
       });
 
-      if (!uploadRes.ok) {
-        const uploadErr = await uploadRes.json().catch(() => ({}));
-        throw new Error(uploadErr.error ?? "Photo upload failed");
-      }
-
+      if (!uploadRes.ok) throw new Error("Photo upload failed");
       const { url: userPhotoUrl } = await uploadRes.json();
 
-      // Step 2 — Kick off AI try-on (polling handled inside useTryOn hook)
-      await startTryOn({
-        userPhotoUrl,
-        garmentImageUrl: productImage,
-        garmentDescription: productName,
+      // Step - 2: Call AI try-on
+      const tryonRes = await fetch("/api/ai/tryon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userPhotoUrl,
+          garmentImageUrl: productImage,
+          garmentDescription: productName,
+        }),
       });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
-      toast.error(msg);
+
+      if (!tryonRes.ok) {
+        const err = await tryonRes.json();
+        throw new Error(err.detail || "AI generation failed");
+      }
+
+      const { resultUrl } = await tryonRes.json();
+      setResultUrl(resultUrl);
+      setStep("result");
+    } catch (error: any) {
+      console.error("Try-on error:", error);
+      setErrorMsg(error.message || "Something went wrong");
+      setStep("error");
     }
   }
 
-  // FIX: append/remove from DOM so it works in Firefox too
   function handleDownload() {
-    if (!resultUrl) return;
     const a = document.createElement("a");
     a.href = resultUrl;
     a.download = `tryon-${productName.replace(/\s+/g, "-")}.png`;
     a.target = "_blank";
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
   }
 
-  function handleReset() {
-    clearPhoto();
-    reset();
-    setUploadStep("upload");
-    // Reset the file input so the same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  function resetModal() {
+    setStep("upload");
+    setUserPhoto(null);
+    setPreviewUrl("");
+    setResultUrl("");
+    setErrorMsg("");
   }
 
   function handleClose() {
-    handleReset();
+    resetModal();
     onClose();
   }
-
-  // ── Status label shown during generation ────────────────────────────────────
-  // FIX: real status labels mapped from API state, not a hardcoded string
-  const statusLabel = getTryOnStatusLabel(status);
-
-  // ── Estimated progress for the progress bar ─────────────────────────────────
-  // FIX: progress reflects real pipeline stages instead of a static 75%
-  const progressPercent =
-    status === "uploading"  ? 20 :
-    status === "processing" ? 60 :
-    
-    
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -204,11 +156,11 @@ export default function TryOnModal({
         </div>
 
         <div className="p-6">
-          {/* ── Upload Step ─────────────────────────────────────────────────── */}
-          {uploadStep === "upload" && !isGenerating && !isFailed && (
+          {/* Upload Step */}
+          {step === "upload" && (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
-                {/* User photo */}
+                {/* User photo upload */}
                 <div>
                   <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                     Your Photo
@@ -222,7 +174,10 @@ export default function TryOnModal({
                         className="object-cover"
                       />
                       <button
-                        onClick={clearPhoto}
+                        onClick={() => {
+                          setUserPhoto(null);
+                          setPreviewUrl("");
+                        }}
                         className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-gray-100"
                       >
                         <X className="w-3 h-3" />
@@ -238,10 +193,7 @@ export default function TryOnModal({
                       <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
                         <Upload className="w-6 h-6 text-gray-400" />
                       </div>
-                      <div className="text-center px-4">
-                        <p className="text-xs font-medium text-gray-600">
-                          Click to upload
-                        </p>
+                      <div className="text-center">
                         <p className="text-xs text-gray-400 mt-0.5">
                           or drag and drop
                         </p>
@@ -293,6 +245,7 @@ export default function TryOnModal({
                 </ul>
               </div>
 
+              {/* Generate */}
               <button
                 onClick={handleGenerate}
                 disabled={!userPhoto}
@@ -304,8 +257,8 @@ export default function TryOnModal({
             </div>
           )}
 
-          {/* ── Generating Step ──────────────────────────────────────────────── */}
-          {isGenerating && (
+          {/* Generating Step */}
+          {step === "generating" && (
             <div className="py-12 flex flex-col items-center gap-6">
               <div className="relative">
                 <div className="w-20 h-20 bg-violet-100 rounded-2xl flex items-center justify-center">
@@ -315,59 +268,24 @@ export default function TryOnModal({
                   <Loader2 className="w-5 h-5 text-violet-600 animate-spin" />
                 </div>
               </div>
-
               <div className="text-center">
-                <h3 className="font-semibold text-gray-900 mb-1">
+                <h3 className="font-semibold text-gray-900 mb-2">
                   AI is generating your look...
                 </h3>
-                {/* FIX: real status label + accurate time estimate */}
-                <p className="text-sm text-gray-500">{statusLabel}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  This model typically takes 2–4 minutes
+                <p className="text-sm text-gray-500">
+                  This takes about 30–60 seconds. Please wait.
                 </p>
               </div>
 
-              {/* FIX: progress bar driven by real pipeline stage */}
-              <div className="w-full max-w-xs space-y-1.5">
-                <div className="bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="h-full bg-violet-500 rounded-full transition-all duration-700 ease-in-out"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-400 text-center">
-                  {progressPercent}% — {statusLabel}
-                </p>
+              {/* Progress bar animation */}
+              <div className="w-full max-w-xs bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div className="h-full bg-violet-500 rounded-full animate-pulse w-3/4" />
               </div>
             </div>
           )}
 
-          {/* ── Error Step ───────────────────────────────────────────────────── */}
-          {isFailed && (
-            <div className="py-10 flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center">
-                <AlertCircle className="w-8 h-8 text-red-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-1">
-                  Generation failed
-                </h3>
-                {/* FIX: shows the real error from the API (includes debug detail) */}
-                <p className="text-sm text-gray-500 max-w-xs">
-                  {error ?? "Something went wrong. Please try again."}
-                </p>
-              </div>
-              <button
-                onClick={handleReset}
-                className="bg-violet-600 text-white font-medium px-6 py-2.5 rounded-xl hover:bg-violet-700 transition-colors text-sm"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* ── Result Step ──────────────────────────────────────────────────── */}
-          {uploadStep === "result" && resultUrl && (
+          {/* Result Step */}
+          {step === "result" && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="w-5 h-5" />
@@ -377,6 +295,7 @@ export default function TryOnModal({
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                {/* Original */}
                 <div>
                   <p className="text-xs text-gray-500 mb-2 text-center">
                     Your Photo
@@ -390,6 +309,7 @@ export default function TryOnModal({
                     />
                   </div>
                 </div>
+                {/* Resultt */}
                 <div>
                   <p className="text-xs text-violet-600 font-semibold mb-2 text-center">
                     AI Result ✨
@@ -414,13 +334,34 @@ export default function TryOnModal({
                   Download
                 </button>
                 <button
-                  onClick={handleReset}
+                  onClick={resetModal}
                   className="flex-1 flex items-center justify-center gap-2 bg-violet-600 text-white font-medium py-2.5 rounded-xl hover:bg-violet-700 transition-colors text-sm"
                 >
                   <Upload className="w-4 h-4" />
                   Try Another Photo
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Error Step */}
+          {step === "error" && (
+            <div className="py-10 flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-1">
+                  Generation failed
+                </h3>
+                <p className="text-sm text-gray-500 max-w-xs">{errorMsg}</p>
+              </div>
+              <button
+                onClick={resetModal}
+                className="bg-violet-600 text-white font-medium px-6 py-2.5 rounded-xl hover:bg-violet-700 transition-colors text-sm"
+              >
+                Try Again
+              </button>
             </div>
           )}
         </div>
