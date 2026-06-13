@@ -173,9 +173,11 @@ export default function TryOnModal({
 
   // ── Estimated progress for the progress bar ─────────────────────────────────
   // FIX: progress reflects real pipeline stages instead of a static 75%
+  // ✅ Complete ternary chain
   const progressPercent =
-    status === "uploading"  ? 20 :
-    status === "processing" ? 60 :
+  status === "uploading"  ? 20 :
+  status === "processing" ? 60 :
+  status === "succeeded"  ? 100 : 0;
     
     
 
