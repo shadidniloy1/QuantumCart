@@ -61,7 +61,6 @@ export default function TryOnModal({
   }, []);
 
   function setPhoto(file: File) {
-    // Revoke previous object URL before creating a new one
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
     }
@@ -96,7 +95,6 @@ export default function TryOnModal({
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
-    // FIX: removed duplicate null check
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -114,7 +112,6 @@ export default function TryOnModal({
     if (!userPhoto) return;
 
     try {
-      // Step 1 — Upload user photo to Cloudinary
       const formData = new FormData();
       formData.append("file", userPhoto);
 
@@ -130,7 +127,6 @@ export default function TryOnModal({
 
       const { url: userPhotoUrl } = await uploadRes.json();
 
-      // Step 2 — Kick off AI try-on (polling handled inside useTryOn hook)
       await startTryOn({
         userPhotoUrl,
         garmentImageUrl: productImage,
@@ -142,7 +138,6 @@ export default function TryOnModal({
     }
   }
 
-  // FIX: append/remove from DOM so it works in Firefox too
   function handleDownload() {
     if (!resultUrl) return;
     const a = document.createElement("a");
@@ -158,7 +153,6 @@ export default function TryOnModal({
     clearPhoto();
     reset();
     setUploadStep("upload");
-    // Reset the file input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -167,56 +161,65 @@ export default function TryOnModal({
     onClose();
   }
 
-  // ── Status label shown during generation ────────────────────────────────────
-  // FIX: real status labels mapped from API state, not a hardcoded string
   const statusLabel = getTryOnStatusLabel(status);
 
-  // ── Estimated progress for the progress bar ─────────────────────────────────
-  // FIX: progress reflects real pipeline stages instead of a static 75%
-  // ✅ Complete ternary chain
   const progressPercent =
-  status === "uploading"  ? 20 :
-  status === "processing" ? 60 :
-  status === "succeeded"  ? 100 : 0;
-    
-    
+    status === "uploading"  ? 20 :
+    status === "processing" ? 60 :
+    status === "succeeded"  ? 100 : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-2xl">
+      {/*
+        FIX (transparency): bg-background was resolving to a transparent
+        value, letting page content show through. Set an explicit opaque
+        background, plus a stronger shadow/ring so the modal reads as a
+        distinct surface above the page.
+      */}
+      <DialogContent
+        className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden rounded-2xl
+                   bg-white text-gray-900 border border-gray-200
+                   shadow-[0_8px_40px_-8px_rgba(0,0,0,0.25)]
+                   max-h-[90vh] flex flex-col"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-violet-600" />
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 bg-white shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 ring-1 ring-violet-100">
+              <Sparkles className="w-4.5 h-4.5 text-violet-600" />
             </div>
-            <div>
-              <h2 className="font-semibold text-gray-900 text-sm">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-gray-900 text-sm leading-tight">
                 AI Virtual Try-On
               </h2>
-              <p className="text-xs text-gray-400">{productName}</p>
+              <p className="text-xs text-gray-400 truncate">{productName}</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+            aria-label="Close dialog"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-400
+                       hover:bg-gray-100 hover:text-gray-600
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300
+                       transition-colors shrink-0"
           >
-            <X className="w-4 h-4 text-gray-500" />
+            <X className="w-4.5 h-4.5" />
           </button>
         </div>
 
-        <div className="p-6">
+        {/* Scrollable body */}
+        <div className="p-5 sm:p-6 overflow-y-auto">
           {/* ── Upload Step ─────────────────────────────────────────────────── */}
           {uploadStep === "upload" && !isGenerating && !isFailed && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {/* User photo */}
                 <div>
                   <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                     Your Photo
                   </p>
                   {previewUrl ? (
-                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-gray-200">
+                    <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                       <Image
                         src={previewUrl}
                         alt="Your photo"
@@ -225,9 +228,12 @@ export default function TryOnModal({
                       />
                       <button
                         onClick={clearPhoto}
-                        className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-gray-100"
+                        aria-label="Remove photo"
+                        className="absolute top-2 right-2 w-7 h-7 bg-white/95 rounded-full flex items-center justify-center
+                                   shadow-sm hover:bg-gray-100
+                                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5 text-gray-600" />
                       </button>
                     </div>
                   ) : (
@@ -235,7 +241,18 @@ export default function TryOnModal({
                       onClick={() => fileInputRef.current?.click()}
                       onDrop={handleDrop}
                       onDragOver={(e) => e.preventDefault()}
-                      className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-300 hover:bg-violet-50/50 transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          fileInputRef.current?.click();
+                        }
+                      }}
+                      className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-200
+                                 flex flex-col items-center justify-center gap-3 cursor-pointer
+                                 hover:border-violet-300 hover:bg-violet-50/50
+                                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300
+                                 transition-colors"
                     >
                       <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
                         <Upload className="w-6 h-6 text-gray-400" />
@@ -275,7 +292,7 @@ export default function TryOnModal({
                       className="object-cover"
                     />
                     <div className="absolute bottom-2 left-2 right-2">
-                      <span className="text-xs bg-white/90 text-gray-700 px-2 py-1 rounded-lg font-medium line-clamp-1">
+                      <span className="text-xs bg-white/90 text-gray-700 px-2 py-1 rounded-lg font-medium line-clamp-1 backdrop-blur-sm">
                         {productName}
                       </span>
                     </div>
@@ -298,7 +315,12 @@ export default function TryOnModal({
               <button
                 onClick={handleGenerate}
                 disabled={!userPhoto}
-                className="w-full bg-violet-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="w-full bg-violet-600 text-white font-semibold py-3 rounded-xl
+                           flex items-center justify-center gap-2
+                           hover:bg-violet-700 active:bg-violet-800
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
                 Generate Try-On
@@ -308,28 +330,26 @@ export default function TryOnModal({
 
           {/* ── Generating Step ──────────────────────────────────────────────── */}
           {isGenerating && (
-            <div className="py-12 flex flex-col items-center gap-6">
+            <div className="py-10 sm:py-12 flex flex-col items-center gap-6">
               <div className="relative">
-                <div className="w-20 h-20 bg-violet-100 rounded-2xl flex items-center justify-center">
+                <div className="w-20 h-20 bg-violet-50 rounded-2xl flex items-center justify-center ring-1 ring-violet-100">
                   <Sparkles className="w-10 h-10 text-violet-600" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full flex items-center justify-center border border-gray-100">
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm">
                   <Loader2 className="w-5 h-5 text-violet-600 animate-spin" />
                 </div>
               </div>
 
-              <div className="text-center">
+              <div className="text-center px-4">
                 <h3 className="font-semibold text-gray-900 mb-1">
                   AI is generating your look...
                 </h3>
-                {/* FIX: real status label + accurate time estimate */}
                 <p className="text-sm text-gray-500">{statusLabel}</p>
                 <p className="text-xs text-gray-400 mt-1">
                   This model typically takes 2–4 minutes
                 </p>
               </div>
 
-              {/* FIX: progress bar driven by real pipeline stage */}
               <div className="w-full max-w-xs space-y-1.5">
                 <div className="bg-gray-100 rounded-full h-1.5 overflow-hidden">
                   <div
@@ -338,7 +358,7 @@ export default function TryOnModal({
                   />
                 </div>
                 <p className="text-xs text-gray-400 text-center">
-                  {progressPercent}% — {statusLabel}
+                  {progressPercent}%
                 </p>
               </div>
             </div>
@@ -354,14 +374,16 @@ export default function TryOnModal({
                 <h3 className="font-semibold text-gray-900 mb-1">
                   Generation failed
                 </h3>
-                {/* FIX: shows the real error from the API (includes debug detail) */}
                 <p className="text-sm text-gray-500 max-w-xs">
                   {error ?? "Something went wrong. Please try again."}
                 </p>
               </div>
               <button
                 onClick={handleReset}
-                className="bg-violet-600 text-white font-medium px-6 py-2.5 rounded-xl hover:bg-violet-700 transition-colors text-sm"
+                className="bg-violet-600 text-white font-medium px-6 py-2.5 rounded-xl
+                           hover:bg-violet-700
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2
+                           transition-colors text-sm"
               >
                 Try Again
               </button>
@@ -378,12 +400,12 @@ export default function TryOnModal({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <p className="text-xs text-gray-500 mb-2 text-center">
                     Your Photo
                   </p>
-                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-gray-200">
+                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                     <Image
                       src={previewUrl}
                       alt="Original"
@@ -396,7 +418,7 @@ export default function TryOnModal({
                   <p className="text-xs text-violet-600 font-semibold mb-2 text-center">
                     AI Result ✨
                   </p>
-                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-violet-300">
+                  <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-violet-300 bg-gray-50">
                     <Image
                       src={resultUrl}
                       alt="Try-on result"
@@ -407,17 +429,23 @@ export default function TryOnModal({
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleDownload}
-                  className="flex-1 flex items-center justify-center gap-2 border border-gray-200 text-gray-700 font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 border border-gray-200 text-gray-700 font-medium py-2.5 rounded-xl
+                             hover:bg-gray-50
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300
+                             transition-colors text-sm"
                 >
                   <Download className="w-4 h-4" />
                   Download
                 </button>
                 <button
                   onClick={handleReset}
-                  className="flex-1 flex items-center justify-center gap-2 bg-violet-600 text-white font-medium py-2.5 rounded-xl hover:bg-violet-700 transition-colors text-sm"
+                  className="flex-1 flex items-center justify-center gap-2 bg-violet-600 text-white font-medium py-2.5 rounded-xl
+                             hover:bg-violet-700
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 focus-visible:ring-offset-2
+                             transition-colors text-sm"
                 >
                   <Upload className="w-4 h-4" />
                   Try Another Photo
