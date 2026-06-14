@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { v2 as cloudinary } from "cloudinary";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-// The original yisol/IDM-VTON space uses ZeroGPU which blocks raw API calls.
-// We use the @gradio/client npm package which handles the ZeroGPU auth handshake.
-// Requires a FREE Hugging Face token (read-only is fine):
-//   1. Go to https://huggingface.co/settings/tokens
-//   2. Create a token (Read access is enough)
-//   3. Add to .env.local: HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx
-
 const SPACE_ID = "yisol/IDM-VTON";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,18 +28,64 @@ async function urlToBlob(imageUrl: string): Promise<Blob> {
   return res.blob();
 }
 
+/**
+ * Downloads the ephemeral HF result file and re-uploads it to Cloudinary
+ * for a permanent, publicly accessible URL.
+ */
+async function persistResultToCloudinary(
+  hfFileUrl: string,
+  hfToken: string
+): Promise<string> {
+  // The HF temp file endpoint may require the auth token for ZeroGPU spaces
+  let fileRes = await fetch(hfFileUrl, {
+    headers: { Authorization: `Bearer ${hfToken}` },
+  });
+
+  // Some spaces serve /file= publicly without auth — retry without header
+  if (!fileRes.ok) {
+    fileRes = await fetch(hfFileUrl);
+  }
+
+  if (!fileRes.ok) {
+    throw new Error(
+      `Could not download result image from HF (${fileRes.status}): ${hfFileUrl}`
+    );
+  }
+
+  const arrayBuffer = await fileRes.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  const mimeType = fileRes.headers.get("content-type") ?? "image/png";
+  const dataUri = `data:${mimeType};base64,${base64}`;
+
+  const uploadResult = await cloudinary.uploader.upload(dataUri, {
+    folder: "ai-ecommerce/tryon-results",
+    resource_type: "image",
+  });
+
+  return uploadResult.secure_url;
+}
+
 // ─── POST /api/try-on ─────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // ── 1. Token guard ───────────────────────────────────────────────────────
+  // ── 1. Token guards ──────────────────────────────────────────────────────
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) {
     console.error("[try-on] HF_TOKEN is not configured");
     return NextResponse.json(
-      {
-        error: "Server misconfiguration: HF_TOKEN missing",
-        debug: "Add HF_TOKEN=hf_xxx to your .env.local. Get a free token at https://huggingface.co/settings/tokens",
-      },
+      { error: "Server misconfiguration: HF_TOKEN missing" },
+      { status: 500 }
+    );
+  }
+
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    console.error("[try-on] Cloudinary env vars missing");
+    return NextResponse.json(
+      { error: "Server misconfiguration: Cloudinary credentials missing" },
       { status: 500 }
     );
   }
@@ -72,8 +118,8 @@ export async function POST(req: NextRequest) {
       ? garmentDescription.trim()
       : "a clothing item";
 
-  // ── 3. Fetch images as blobs ─────────────────────────────────────────────
-  console.log("[try-on] Fetching images...");
+  // ── 3. Fetch input images as blobs ───────────────────────────────────────
+  console.log("[try-on] Fetching input images...");
   let humanBlob: Blob, garmentBlob: Blob;
   try {
     [humanBlob, garmentBlob] = await Promise.all([
@@ -89,10 +135,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 4. Call via @gradio/client (handles ZeroGPU auth automatically) ──────
+  // ── 4. Call IDM-VTON via @gradio/client ──────────────────────────────────
   console.log("[try-on] Connecting to Hugging Face space...");
+
+  let hfResultUrl: string;
+
   try {
-    // Dynamic import — install with: npm install @gradio/client
     const { Client } = await import("@gradio/client");
 
     const client = await Client.connect(SPACE_ID, {
@@ -111,16 +159,9 @@ export async function POST(req: NextRequest) {
       seed: 42,
     });
 
-    console.log("[try-on] Raw result:", JSON.stringify(result?.data)?.slice(0, 300));
-
-    // result.data is an array; first element is the try-on output image object
     const output = (result as any)?.data?.[0];
-
-    // Gradio returns { url, path, orig_name, ... } or a direct URL string
     const resultUrl =
-      typeof output === "string"
-        ? output
-        : output?.url ?? output?.path ?? null;
+      typeof output === "string" ? output : output?.url ?? output?.path ?? null;
 
     if (!resultUrl) {
       console.error("[try-on] No output URL in result:", result);
@@ -130,19 +171,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Gradio sometimes returns a relative path — prepend space URL if needed
-    const finalUrl = resultUrl.startsWith("http")
+    hfResultUrl = resultUrl.startsWith("http")
       ? resultUrl
       : `https://yisol-idm-vton.hf.space/file=${resultUrl}`;
 
-    console.log("[try-on] ✅ Success:", finalUrl);
-    return NextResponse.json({ resultUrl: finalUrl }, { status: 200 });
-
+    console.log("[try-on] HF result URL (ephemeral):", hfResultUrl);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[try-on] Gradio client error:", msg);
 
-    // Give a helpful message for common failure modes
     if (msg.includes("is currently unavailable") || msg.includes("503")) {
       return NextResponse.json(
         { error: "Hugging Face space is sleeping — please try again in 30 seconds", debug: msg },
@@ -155,15 +192,26 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    if (msg.includes("Cannot find module")) {
-      return NextResponse.json(
-        { error: "Missing dependency — run: npm install @gradio/client", debug: msg },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json(
       { error: "Hugging Face try-on failed", debug: msg },
+      { status: 502 }
+    );
+  }
+
+  // ── 5. Re-host the ephemeral HF result on Cloudinary ─────────────────────
+  // FIX: HF /tmp/gradio/ URLs are session-bound and disappear quickly in prod.
+  // Download immediately and persist on Cloudinary for a permanent public URL.
+  console.log("[try-on] Persisting result to Cloudinary...");
+  try {
+    const permanentUrl = await persistResultToCloudinary(hfResultUrl, hfToken);
+    console.log("[try-on] ✅ Success. Permanent URL:", permanentUrl);
+    return NextResponse.json({ resultUrl: permanentUrl }, { status: 200 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[try-on] Cloudinary persist error:", msg);
+    return NextResponse.json(
+      { error: "Generated image could not be saved", debug: msg },
       { status: 502 }
     );
   }
