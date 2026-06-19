@@ -7,18 +7,23 @@ import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react";
 export default function ImageGallery({
   images,
   name,
+  active,
+  onActiveChange,
 }: {
   images: string[];
   name: string;
+  active: number;
+  onActiveChange: (index: number) => void;
 }) {
-  const [active, setActive] = useState(0);
+  // FIX: `active` no longer owned here — it's now a controlled prop from the
+  // parent page, so the parent (and TryOnModal) always knows which image is showing.
   const [zoomed, setZoomed] = useState(false);
 
   function prev() {
-    setActive((a) => (a === 0 ? images.length - 1 : a - 1));
+    onActiveChange(active === 0 ? images.length - 1 : active - 1);
   }
   function next() {
-    setActive((a) => (a === 0 ? images.length - 1 : a + 1));
+    onActiveChange(active === images.length - 1 ? 0 : active + 1);
   }
 
   return (
@@ -74,7 +79,7 @@ export default function ImageGallery({
                 key={i}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActive(i);
+                  onActiveChange(i);
                 }}
                 className={`w-1.5 h-1.5 rounded-full transition-all ${
                   i === active ? "bg-white w-4" : "bg-white/60"
@@ -91,7 +96,7 @@ export default function ImageGallery({
           {images.map((img, i) => (
             <button
               key={i}
-              onClick={() => setActive(i)}
+              onClick={() => onActiveChange(i)}
               className={`relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
                 i === active
                   ? "border-violet-500"

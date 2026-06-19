@@ -37,6 +37,10 @@ export default function ProductDetailPage() {
   const [wishlisted, setWishlisted] = useState(false);
   const [tryOnOpen, setTryOnOpen] = useState(false);
 
+  // FIX: lifted out of ImageGallery so the page (and TryOnModal) always know
+  // which product image is currently being viewed.
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
   //   Fetch
   useEffect(() => {
     if (!slug) return;
@@ -48,6 +52,9 @@ export default function ProductDetailPage() {
         // Set defaults
         if (data.sizes?.length) setSelectedSize(data.sizes[0]);
         if (data.colors?.length) setSelectedColor(data.colors[0]);
+        // FIX: reset gallery position whenever a new product loads, so we
+        // never point at an index that doesn't exist on the new product.
+        setActiveImageIndex(0);
         setLoading(false);
 
         // Fetch related products
@@ -189,7 +196,14 @@ export default function ProductDetailPage() {
         {/* Main content */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-16">
           {/* Left - image gallery */}
-          <ImageGallery images={product.images} name={product.name} />
+          {/* FIX: gallery is now controlled — page owns `active`, passes it down,
+              and receives updates via onActiveChange */}
+          <ImageGallery
+            images={product.images}
+            name={product.name}
+            active={activeImageIndex}
+            onActiveChange={setActiveImageIndex}
+          />
 
           {/* Right - Product info */}
           <div className="flex flex-col gap-5">
@@ -440,10 +454,13 @@ export default function ProductDetailPage() {
       </div>
 
       {/* AI Try-on Modal */}
+      {/* FIX: uses the live activeImageIndex instead of always images[0] */}
       <TryOnModal
         open={tryOnOpen}
         onClose={() => setTryOnOpen(false)}
-        productImage={product.images?.[0] ?? ""}
+        productImage={
+          product.images?.[activeImageIndex] ?? product.images?.[0] ?? ""
+        }
         productName={product.name}
       />
     </>
