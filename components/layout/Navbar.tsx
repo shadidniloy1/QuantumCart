@@ -244,7 +244,7 @@ export default function Navbar() {
                 </Button>
               </SheetTrigger>
 
-              <SheetContent side="left" className="w-72 p-0">
+              <SheetContent side="left" className="w-72 p-0 bg-white border-r border-gray-100">
                 <MobileMenu
                   user={user}
                   dbUser={dbUser}
